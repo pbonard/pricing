@@ -1,9 +1,10 @@
 """A collector's run, the same for both collectors: the next search of config.py's rotation, through the collector's
 own way of searching Google, saved as soon as it's done.
 
-A run does one search: the one after the search the run before saved (config.next_search), so the cronjob's schedule
-alone decides how often searches come and the rotation goes round DAYS_AHEAD, the routes and the stays. A run starts
-after a random delay (START_JITTER_MAX_SECONDS), so the search doesn't come at the same minute every time.
+A run does one search: the one after the search the run before saved, or that one again when it failed
+(config.next_search). So the cronjob's schedule alone decides how often searches come, and the rotation goes round
+DAYS_AHEAD, the routes and the stays. A run starts after a random delay (START_JITTER_MAX_SECONDS), so the search
+doesn't come at the same minute every time.
 """
 
 import logging
@@ -49,12 +50,13 @@ def main(open_search: Callable[[Config], AbstractContextManager[Search]]) -> int
         return 0
     # schema first, so a bad DATABASE_URL fails the run before any request to Google, and the last search to go on
     # from. a dry run doesn't touch the database, it always shows the rotation's first search
-    last, last_day = None, None
+    last, last_day, last_status = None, None, None
     if not config.dry_run:
         with db.connect() as conn:
             db.ensure_schema(conn)
-            last, last_day = db.last_search(conn) or (None, None)
-    job = next_search(config, now.date(), last, last_day)
+            last, last_day, last_status = db.last_search(conn, config.routes) or (None, None, None)
+    # a blocked or failed search is done again, the rotation goes on once it worked
+    job = next_search(config, now.date(), last, last_day, last_failed=last_status in ("blocked", "error"))
     if job is None:
         log.warning("nothing to search")
         return 0

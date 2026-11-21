@@ -1,0 +1,73 @@
+{{- range $name, $collector := .Values.collectors }}
+---
+# {{ $name }}: every run does the next search of its configmap's rotation, saves it to the cloudnative-pg cluster of
+# my-infra k8s/bootstrap/postgres-cluster.yaml and ends
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: {{ $name }}
+  namespace: {{ $.Values.namespace }}
+  labels:
+    app: {{ $name }}
+spec:
+  schedule: {{ $collector.schedule | quote }}
+  timeZone: Asia/Seoul
+  suspend: {{ $collector.suspend | default false }}
+  # a slow run is skipped over rather than run alongside, two runs at once is twice the traffic to Google
+  concurrencyPolicy: Forbid
+  # a run that couldn't start in time (node down) is skipped, there's another soon
+  startingDeadlineSeconds: 600
+  successfulJobsHistoryLimit: 3
+  failedJobsHistoryLimit: 3
+  jobTemplate:
+    spec:
+      # no retries: a failed run is mostly a block, and retrying at once only makes it last. the next run does the
+      # failed search again
+      backoffLimit: 0
+      # a run takes minutes, a hung one is stopped well before the other collector's run
+      activeDeadlineSeconds: 3600
+      ttlSecondsAfterFinished: 86400
+      template:
+        metadata:
+          labels:
+            app: {{ $name }}
+          annotations:
+            # a changed config is a changed pod template, so it's plain in argo cd which config a run used
+            checksum/config: {{ merge (deepCopy ($collector.config | default dict)) $.Values.config | toJson | sha256sum }}
+        spec:
+          restartPolicy: Never
+          {{- if hasPrefix "ghcr.io/" $.Values.registry }}
+          imagePullSecrets:
+            - name: ghcr
+          {{- end }}
+          containers:
+            - name: collector
+              image: "{{ $.Values.registry }}/{{ $name }}:{{ $.Values.tag }}"
+              envFrom:
+                - configMapRef:
+                    name: {{ $name }}
+              env:
+                # made by cloudnative-pg for the cluster's owner: postgresql://flights:...@postgres-rw.backend:5432/flights
+                - name: DATABASE_URL
+                  valueFrom:
+                    secretKeyRef:
+                      name: postgres-app
+                      key: uri
+              resources:
+                requests:
+                  cpu: 50m
+                  memory: {{ $collector.memoryRequests | quote }}
+                limits:
+                  memory: {{ $collector.memoryLimits | quote }}
+              securityContext:
+                allowPrivilegeEscalation: false
+                readOnlyRootFilesystem: true
+                runAsNonRoot: true
+              volumeMounts:
+                # the root filesystem is read only, temporary files go here
+                - name: tmp
+                  mountPath: /tmp
+          volumes:
+            - name: tmp
+              emptyDir: {}
+{{- end }}

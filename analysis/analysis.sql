@@ -1,4 +1,4 @@
--- queries over search (s) and flight (f), collector/common/schema.sql. from a laptop:
+-- queries over search (s) and flight (f), flight_collector/common/schema.sql. from a laptop:
 --   kubectl -n backend port-forward svc/postgres-rw 5432 &
 --   psql "$(kubectl -n backend get secret postgres-app -o jsonpath='{.data.uri}' | base64 -d | sed 's/postgres-rw.backend/localhost/')" -f analysis/analysis.sql
 -- only ok searches have flights, so joining the two already leaves the failed ones out.

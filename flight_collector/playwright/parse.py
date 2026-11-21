@@ -11,7 +11,7 @@ a payload laid out like the page's ds:1 script:
     leg             [3] / [6] from / to, [8] / [10] departure / arrival time, [20] / [21] their dates,
                     [11] minutes in the air, [17] plane, [22] carrier: [code, number, None, name]
 
-Every value is checked before it's handed on as a Flight (collector/common/model.py): a result whose flight data is wrong is
+Every value is checked before it's handed on as a Flight (flight_collector/common/model.py): a result whose flight data is wrong is
 skipped with the reason, a leg's carrier that doesn't look right is left out (null), so a misread never lands in a
 table.
 """

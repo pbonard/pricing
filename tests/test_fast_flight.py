@@ -1,4 +1,4 @@
-"""Tests of the fast-flights collector (collector/fast_flight/), run from the repo root: python -m unittest discover -s tests -t .
+"""Tests of the fast-flights collector (flight_collector/fast_flight/), run from the repo root: python -m unittest discover -s tests -t .
 
 The search page is faked (tests/fakes.py), so nothing here goes out to the network.
 """
@@ -7,8 +7,8 @@ import unittest
 from datetime import datetime
 from unittest import mock
 
-from collector.fast_flight import search as g
-from collector.common import config as conf
+from flight_collector.fast_flight import search as g
+from flight_collector.common import config as conf
 
 from tests.fakes import (CONNECTION, DEPART, NONSTOP, NOT_FOUND_PAGE, RETURN, page, raw_leg,
                                 raw_result)

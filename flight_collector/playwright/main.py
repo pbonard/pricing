@@ -1,11 +1,11 @@
-"""The playwright collector: python -m collector.playwright, from the repo root.
+"""The playwright collector: python -m flight_collector.playwright, from the repo root.
 
 A plain request for the search page gets about 50 results, the ones Google puts on the page before any script
 runs, and that's what the fast-flights collector reads. This one opens the search in headless Chromium, clicks
 "View more flights" and reads the results the page asks Google for: the whole list (about 210 for Seoul to Tokyo),
 top flights included. See browser.py.
 
-What to search and the run itself are collector/common/ (config.py, run.py), the same as the fast-flights collector's.
+What to search and the run itself are flight_collector/common/ (config.py, run.py), the same as the fast-flights collector's.
 One more setting is its own:
 
     PAGE_TIMEOUT_SECONDS   60   how long a search's page may take to finish

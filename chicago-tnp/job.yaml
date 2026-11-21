@@ -1,0 +1,44 @@
+# One-off load of Chicago TNP trips into the backend ClickHouse (my-infra k8s/bootstrap/clickhouse-cluster.yaml).
+# The scripts go in as a ConfigMap made by kustomization.yaml next to this file:
+#   kubectl apply -k chicago-tnp/
+#   kubectl logs -n backend -f job/chicago-tnp-load
+# Rerunning resumes (load.sh): kubectl delete job -n backend chicago-tnp-load, then apply again.
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: chicago-tnp-load
+  namespace: backend
+spec:
+  # a failed run goes on from the days already loaded
+  backoffLimit: 3
+  template:
+    spec:
+      restartPolicy: Never
+      containers:
+        - name: load
+          # only for clickhouse-client and bash, the same version as the server
+          image: clickhouse/clickhouse-server:26.10
+          command: ["bash", "/scripts/load.sh"]
+          env:
+            - name: PARALLEL
+              value: "8"
+            - name: CLICKHOUSE_HOST
+              value: clickhouse-clickhouse-headless.backend
+            - name: CLICKHOUSE_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: clickhouse-password
+                  key: password
+          resources:
+            requests:
+              cpu: 100m
+              memory: 128Mi
+            limits:
+              memory: 512Mi
+          volumeMounts:
+            - name: scripts
+              mountPath: /scripts
+      volumes:
+        - name: scripts
+          configMap:
+            name: chicago-tnp-scripts
