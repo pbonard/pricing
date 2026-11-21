@@ -1,6 +1,6 @@
 """Searching Google Flights with fast-flights: one plain request, its page parsed by fast-flights plus what
 fast-flights leaves out (each leg's airline and flight number), every value checked, each result a Flight
-(collector/common/model.py) to be saved.
+(flight_collector/common/model.py) to be saved.
 
 A round-trip search lists the outbound flights, each priced as a whole round-trip ticket: that outbound with the
 cheapest return of the return date that can be on the same ticket. Google doesn't say which return, so only the

@@ -1,0 +1,53 @@
+namespace: backend
+registry: "ghcr.io/pbonard"
+# the build of both collectors' images, written by .github/workflows/build.yml on every push to main
+tag: "e6c73b5"
+
+# every collector's settings (flight_collector/common/config.py), a collector's own config below overrides them.
+# read when each run starts: a change here, synced by argo cd, applies from the next run. a bad one fails the run with
+# the reason in its log
+config:
+  # the departure dates are BASE_DATE plus each of DAYS_AHEAD (0 is BASE_DATE itself, empty is 0).
+  # BASE_DATE is one date (YYYY-MM-DD), or empty for the day of each run (KST). once a BASE_DATE has passed every run
+  # ends at once without searching: set a new one or suspend the collector
+  BASE_DATE: ""
+  # each run does one search, the one after the search the run before saved (that one again when it failed), then over
+  # again: +1 -> +7 -> +14 -> +30 -> +60 -> +1 ... with more routes, each date's routes take turns.
+  # how often is the collector's schedule alone
+  DAYS_AHEAD: "1,7,14,30,60"
+  # round-trip or one-way, and for a round trip the nights between departure and return for routes without their own
+  TRIP: "round-trip"
+  STAY_NIGHTS: "4"
+  SEAT: "economy"
+  ADULTS: "1"
+  # empty for any number of stops, 0 for nonstop only
+  MAX_STOPS: ""
+  CURRENCY: "KRW"
+  # a random wait before the search, so it doesn't come at the same minute every time. keep it well under the time
+  # between one collector's run and the other's (4 hours)
+  START_JITTER_MAX_SECONDS: "1800"
+  # "true" searches and logs but writes nothing
+  DRY_RUN: "false"
+
+# a cronjob and a configmap each, the image is ghcr.io/pbonard/<name>:<tag>. each goes round its own ROUTES.
+# every 8 hours each and 4 hours apart, so there's one search every 4 hours from the node's ip
+collectors:
+  # a plain request per search: short routes, their nonstops are on the first page
+  fast-flight-collector:
+    schedule: "0 */8 * * *"  # 00:00, 08:00, 16:00 KST
+    suspend: false
+    memoryRequests: "128Mi"
+    memoryLimits: "256Mi"
+    config:
+      # origin-destination pairs, city codes cover all their airports (SEL is ICN and GMP, TYO is NRT and HND).
+      # a pair may have its own nights of stay (SEL-BER:7), the others take STAY_NIGHTS
+      ROUTES: "SEL-TYO"
+  # a browser and the whole result list: long-haul routes, few of their flights are on the first page
+  playwright-collector:
+    schedule: "0 4-23/8 * * *"  # 04:00, 12:00, 20:00 KST
+    suspend: false
+    # chromium takes a few hundred MB while a page is open
+    memoryRequests: "256Mi"
+    memoryLimits: "1Gi"
+    config:
+      ROUTES: "BER-SEL:19"

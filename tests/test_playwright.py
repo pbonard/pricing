@@ -1,4 +1,4 @@
-"""Tests of the playwright collector (collector/playwright/), run from the repo root:
+"""Tests of the playwright collector (flight_collector/playwright/), run from the repo root:
 python -m unittest discover -s tests -t .
 
 The search answers are faked (tests/fakes.py) and the browser is replaced, so nothing here goes out to the network or
@@ -10,9 +10,9 @@ import unittest
 from datetime import date, datetime
 from unittest import mock
 
-from collector.playwright import browser, parse, query
-from collector.playwright import main as pw
-from collector.common import config as conf
+from flight_collector.playwright import browser, parse, query
+from flight_collector.playwright import main as pw
+from flight_collector.common import config as conf
 
 from tests.fakes import (CONNECTION, DEPART, ERROR_ANSWER, NONSTOP, RETURN, TOP, answer, payload, raw_leg,
                                 raw_result)

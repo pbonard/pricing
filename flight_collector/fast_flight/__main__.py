@@ -1,4 +1,4 @@
-"""The fast-flights collector: python -m collector.fast_flight, from the repo root."""
+"""The fast-flights collector: python -m flight_collector.fast_flight, from the repo root."""
 
 import sys
 from contextlib import nullcontext

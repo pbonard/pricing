@@ -1,0 +1,4 @@
+apiVersion: v2
+name: flight-collector
+description: the collectors' cronjobs and their configmaps, one of each per collector in values.yaml
+version: 0.1.0

@@ -26,15 +26,19 @@ def ensure_schema(conn) -> None:
     conn.execute(SCHEMA.read_text())
 
 
-def last_search(conn) -> tuple[Search, date] | None:
-    """The search saved last, failed ones too, and the day (KST) it was saved: where the rotation goes on from."""
+def last_search(conn, routes: list[tuple[str, str]]) -> tuple[Search, date, str] | None:
+    """The search of these routes saved last, failed ones too, the day (KST) it was saved and its status: where the
+    rotation goes on from, or what it does again when it failed. Only these routes: another collector searching other
+    routes into the same tables (its own cronjob and configmap) has its own rotation."""
     row = conn.execute(
-        "SELECT origin, destination, depart_date, return_date, fetched_at FROM search ORDER BY fetched_at DESC LIMIT 1"
+        "SELECT origin, destination, depart_date, return_date, fetched_at, status FROM search "
+        "WHERE origin || '-' || destination = ANY(%s) ORDER BY fetched_at DESC LIMIT 1",
+        ([f"{origin}-{destination}" for origin, destination in routes],),
     ).fetchone()
     if row is None:
         return None
-    origin, destination, depart, return_date, fetched_at = row
-    return (origin, destination, depart, return_date), fetched_at.astimezone(ZoneInfo("Asia/Seoul")).date()
+    origin, destination, depart, return_date, fetched_at, status = row
+    return (origin, destination, depart, return_date), fetched_at.astimezone(ZoneInfo("Asia/Seoul")).date(), status
 
 
 def flight_row(search_id, f: Flight) -> tuple:

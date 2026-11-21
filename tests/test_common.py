@@ -1,4 +1,4 @@
-"""Tests of collector/common/, shared by both collectors: run from the repo root, python -m unittest discover -s tests -t .
+"""Tests of flight_collector/common/, shared by both collectors: run from the repo root, python -m unittest discover -s tests -t .
 
 The save tests need a Postgres and run only when TEST_DATABASE_URL is set, in a schema of their own that they drop
 afterwards.
@@ -12,8 +12,8 @@ from datetime import date, datetime
 from unittest import mock
 from zoneinfo import ZoneInfo
 
-from collector.common import config, db, run
-from collector.common.model import Flight, Leg, carrier, carriers_match, grams, text, whole, without_carriers
+from flight_collector.common import config, db, run
+from flight_collector.common.model import Flight, Leg, carrier, carriers_match, grams, text, whole, without_carriers
 
 from tests.fakes import DEPART, RETURN
 
@@ -190,6 +190,16 @@ class RotationTest(unittest.TestCase):
         runs = self.rotate(self.cfg(ROUTES="SEL-TYO", DAYS_AHEAD="1,7,14"), 4, days=days)
         self.assertEqual([(dep - day).days for (_, _, dep, _), day in zip(runs, days)], [1, 7, 14, 1])
 
+    def test_a_failed_search_is_done_again_the_next_day_for_that_day(self):
+        cfg = self.cfg(ROUTES="SEL-TYO", DAYS_AHEAD="1,7")
+        failed = ("SEL", "TYO", date(2026, 11, 22), date(2026, 11, 25))
+        # +1 failed on the 21st: the same day it's 11-22 again, the next day it's the new day's +1, 11-23
+        self.assertEqual(config.next_search(cfg, self.TODAY, failed, self.TODAY, last_failed=True), failed)
+        self.assertEqual(config.next_search(cfg, date(2026, 11, 22), failed, self.TODAY, last_failed=True),
+                         ("SEL", "TYO", date(2026, 11, 23), date(2026, 11, 26)))
+        self.assertEqual(config.next_search(cfg, self.TODAY, failed, self.TODAY, last_failed=False)[2],
+                         date(2026, 11, 28))
+
     def test_a_last_search_not_in_the_plan_starts_over(self):
         cfg = self.cfg(ROUTES="SEL-TYO", DAYS_AHEAD="1,7")
         osaka = ("SEL", "OSA", date(2026, 11, 22), date(2026, 11, 25))
@@ -274,11 +284,23 @@ class RunTest(unittest.TestCase):
         return code, fake.calls, connect, save
 
     def test_one_search_the_one_after_the_last_saved_and_it_is_saved(self):
-        last = (("SEL", "TYO", date(2026, 11, 20), date(2026, 11, 23)), date(2026, 11, 19))
+        last = (("SEL", "TYO", date(2026, 11, 20), date(2026, 11, 23)), date(2026, 11, 19), "ok")
         code, calls, _, save = self.run_main([OK], last)
         self.assertEqual((code, calls), (0, [("SEL", "OSA", date(2026, 11, 20), date(2026, 11, 23))]))
         save.assert_called_once()
         self.assertEqual(save.call_args.args[4:10], ("SEL", "OSA", date(2026, 11, 20), date(2026, 11, 23), "ok", [NONSTOP]))
+
+    def test_a_blocked_or_failed_search_is_done_again(self):
+        for status in ("blocked", "error"):
+            with self.subTest(status=status):
+                last = (("SEL", "TYO", date(2026, 11, 20), date(2026, 11, 23)), date(2026, 11, 19), status)
+                _, calls, _, _ = self.run_main([OK], last)
+                self.assertEqual(calls, [("SEL", "TYO", date(2026, 11, 20), date(2026, 11, 23))])
+
+    def test_no_flights_found_moves_on(self):
+        last = (("SEL", "TYO", date(2026, 11, 20), date(2026, 11, 23)), date(2026, 11, 19), "not_found")
+        _, calls, _, _ = self.run_main([OK], last)
+        self.assertEqual(calls, [("SEL", "OSA", date(2026, 11, 20), date(2026, 11, 23))])
 
     def test_nothing_saved_yet_is_the_first_search(self):
         _, calls, _, _ = self.run_main([OK])
@@ -356,13 +378,24 @@ class SaveTest(unittest.TestCase):
         )
 
     def test_the_last_search_is_the_one_saved_last(self):
-        self.assertIsNone(db.last_search(self.conn))
+        self.assertIsNone(db.last_search(self.conn, [("SEL", "TYO"), ("SEL", "OSA")]))
         cfg = config.load_config({})
         for when, destination in ((datetime(2026, 11, 19, 1, tzinfo=KST), "TYO"),
                                   (datetime(2026, 11, 20, 0, 30, tzinfo=KST), "OSA")):
             db.save(self.conn, cfg, uuid.uuid4(), when, "SEL", destination, DEPART, RETURN, "ok", [], None)
         # the day is KST: 00:30 KST on the 20th is still the 19th in UTC
-        self.assertEqual(db.last_search(self.conn), (("SEL", "OSA", DEPART, RETURN), date(2026, 11, 20)))
+        self.assertEqual(db.last_search(self.conn, [("SEL", "TYO"), ("SEL", "OSA")]),
+                         (("SEL", "OSA", DEPART, RETURN), date(2026, 11, 20), "ok"))
+
+    def test_the_last_search_is_of_the_routes_asked_for(self):
+        # another collector's routes saved later don't count: each collector has its own rotation
+        cfg = config.load_config({})
+        for when, origin, destination in ((datetime(2026, 11, 20, 8, tzinfo=KST), "SEL", "TYO"),
+                                          (datetime(2026, 11, 20, 10, tzinfo=KST), "BER", "SEL")):
+            db.save(self.conn, cfg, uuid.uuid4(), when, origin, destination, DEPART, RETURN, "ok", [], None)
+        self.assertEqual(db.last_search(self.conn, [("SEL", "TYO")])[0][:2], ("SEL", "TYO"))
+        self.assertEqual(db.last_search(self.conn, [("BER", "SEL")])[0][:2], ("BER", "SEL"))
+        self.assertIsNone(db.last_search(self.conn, [("SEL", "OSA")]))
 
     def test_a_failed_search_is_kept_without_flights(self):
         db.save(self.conn, config.load_config({"TRIP": "one-way"}), uuid.uuid4(), datetime.now().astimezone(), "SEL",

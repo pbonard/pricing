@@ -46,7 +46,7 @@ jobs:
 
       - name: install
         # both collectors' packages: the playwright one's tests need playwright installed, not its browsers
-        run: pip install -r collector/fast_flight/requirements.txt -r collector/playwright/requirements.txt
+        run: pip install -r flight_collector/fast_flight/requirements.txt -r flight_collector/playwright/requirements.txt
 
       - name: test
         env:
@@ -77,7 +77,7 @@ jobs:
         run: |
           IMAGE=$(echo "ghcr.io/${{ github.repository_owner }}/fast-flight-collector" | tr '[:upper:]' '[:lower:]')
           docker buildx build --platform linux/amd64 \
-            -f collector/fast_flight/Dockerfile \
+            -f flight_collector/fast_flight/Dockerfile \
             -t "$IMAGE:${GITHUB_SHA::7}" \
             -t "$IMAGE:latest" \
             --push .
@@ -86,16 +86,16 @@ jobs:
         run: |
           IMAGE=$(echo "ghcr.io/${{ github.repository_owner }}/playwright-collector" | tr '[:upper:]' '[:lower:]')
           docker buildx build --platform linux/amd64 \
-            -f collector/playwright/Dockerfile \
+            -f flight_collector/playwright/Dockerfile \
             -t "$IMAGE:${GITHUB_SHA::7}" \
             -t "$IMAGE:latest" \
             --push .
 
-      # argo cd deploys what k8s/ says, so the new tag goes into git. only the tag is replaced, the image name stays:
-      # whichever collector the cronjob runs gets the new build. k8s/** is paths-ignored, this commit builds nothing
-      - name: write the tag into the cronjob
+      # argo cd deploys the helm chart of k8s/helm, so the new tag goes into its values.yaml: both collectors' images
+      # are this build. k8s/** is paths-ignored, this commit builds nothing
+      - name: write the tag into the helm values
         run: |
-          sed -i -E "s#(image: ghcr.io/[^:]+):.*#\1:${GITHUB_SHA::7}#" k8s/cronjob.yaml
+          sed -i -E "s#^tag: .*#tag: \"${GITHUB_SHA::7}\"#" k8s/helm/values.yaml
           git config user.name "github-actions[bot]"
           git config user.email "41898273+github-actions[bot]@users.noreply.github.com"
           git commit -am "chore: deploy ${GITHUB_SHA::7}" || exit 0

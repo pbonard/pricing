@@ -1,0 +1,12 @@
+# kubectl apply -k chicago-tnp/ : the job plus its scripts as the chicago-tnp-scripts ConfigMap
+namespace: backend
+resources:
+  - job.yaml
+configMapGenerator:
+  - name: chicago-tnp-scripts
+    files:
+      - load.sh
+      - schema.sql
+      - insert_day.sql
+generatorOptions:
+  disableNameSuffixHash: true

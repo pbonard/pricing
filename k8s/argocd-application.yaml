@@ -9,9 +9,10 @@ spec:
   source:
     repoURL: https://github.com/pbonard/flight-pricing-analyzer.git
     targetRevision: main
-    path: k8s
-    directory:
-      exclude: argocd-application.yaml
+    # the collectors' cronjobs and configmaps, managed in its values.yaml
+    path: k8s/helm
+    helm:
+      releaseName: flight-collector
   destination:
     server: https://kubernetes.default.svc
     namespace: backend

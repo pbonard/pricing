@@ -1,7 +1,7 @@
 """What a collector searches: the environment, checked into a Config. Shared by both collectors.
 
-In k8s the environment comes from the ConfigMap in k8s/configmap.yaml, read when each run starts. Every value is
-checked before anything is searched, a bad one fails the run with the reason.
+In k8s the environment comes from the collector's ConfigMap, made from k8s/helm/values.yaml, read when each run
+starts. Every value is checked before anything is searched, a bad one fails the run with the reason.
 """
 
 import os
@@ -215,10 +215,14 @@ def _position(config: Config, today: date, search: Search) -> tuple:
     return origin, destination, (depart - base).days, (return_date - depart).days if return_date else None
 
 
-def next_search(config: Config, today: date, last: Search | None, last_day: date | None = None) -> Search | None:
+def next_search(config: Config, today: date, last: Search | None, last_day: date | None = None,
+                last_failed: bool = False) -> Search | None:
     """The search of this run: the one after the last saved one (last, saved on last_day) in the rotation, the
     first one when nothing was saved yet or the last one isn't in the plan any more (the config changed). None when
-    there's nothing to search. So how often a search comes is the cronjob's schedule alone."""
+    there's nothing to search. So how often a search comes is the cronjob's schedule alone.
+
+    When the last one failed (last_failed, blocked or error) it's done again instead: the rotation doesn't move on
+    until it worked. Again is its place in the rotation, Tokyo +1 the next day is the new day's +1."""
     planned = plan(config, today)
     if not planned:
         return None
@@ -228,4 +232,4 @@ def next_search(config: Config, today: date, last: Search | None, last_day: date
     previous = _position(config, last_day or today, last)
     if previous not in positions:
         return planned[0]
-    return planned[(positions.index(previous) + 1) % len(planned)]
+    return planned[(positions.index(previous) + (0 if last_failed else 1)) % len(planned)]

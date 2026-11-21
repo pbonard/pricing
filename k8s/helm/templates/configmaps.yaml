@@ -1,0 +1,15 @@
+{{- range $name, $collector := .Values.collectors }}
+---
+# what {{ $name }} searches: the shared config of values.yaml with the collector's own over it
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ $name }}
+  namespace: {{ $.Values.namespace }}
+  labels:
+    app: {{ $name }}
+data:
+  {{- range $key, $value := merge (deepCopy ($collector.config | default dict)) $.Values.config }}
+  {{ $key }}: {{ $value | toString | quote }}
+  {{- end }}
+{{- end }}
