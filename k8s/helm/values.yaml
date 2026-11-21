@@ -1,7 +1,7 @@
 namespace: backend
 registry: "ghcr.io/pbonard"
 # the build of both collectors' images, written by .github/workflows/build.yml on every push to main
-tag: "e6c73b5"
+tag: "1dafbf4"
 
 # every collector's settings (flight_collector/common/config.py), a collector's own config below overrides them.
 # read when each run starts: a change here, synced by argo cd, applies from the next run. a bad one fails the run with
